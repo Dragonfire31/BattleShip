@@ -28,6 +28,8 @@ class DB_Engine:
         self.key=None
         self.BIMG=None
         self.GameVer=GV
+        self.AIShotLookback=17 #number of player shots the AI needs to look back on for best placement of ships
+        self.PSMemBoard=[]
 
         print(self.dbConnect(self.cluster))
 
@@ -64,6 +66,8 @@ class DB_Engine:
             self.PlayerMemoryInfluence = doc["PlayerMemoryInfluence"]  # favor more player placements over all others
             self.key = doc["Key"]
             self.BIMG = doc["ImgURL"]
+            self.AIShotLookback=doc["AIShotLookback"]
+            self.PSMemBoard=doc["PSMemBoard"]
 
     def retrive_Users(self):
         userdb = self.db.B_Ship_Users
@@ -115,7 +119,7 @@ class DB_Engine:
         list_allgames = list(allgames)
         self.gamedf = pd.DataFrame(list_allgames)
 
-    def create_game_doc(self,gwinner,placedships,pships,pshiptypeform,pshots,AItype,AIShips,AIshots):
+    def create_game_doc(self,gwinner,placedships,pships,pshiptypeform,pshots,AItype,AIShips,AIshots,AIShipPlace):
         #user ID
         UserID = self.UserInfo.USERID
         #datetime
@@ -144,9 +148,11 @@ class DB_Engine:
         ShotsFired=firedshots
         #GameVersion
         GV = self.GameVer
+        #AI Placing Ships
+        AIPlace = AIShipPlace
 
         gameres = {'userID':UserID,'date':daterun,'winner':winner,'userPlacedShips':placedShips,'playershipindx':playerships,'playershotsindx':playershots,
-                   'AItype':AItype,'AIShipindx':AIShipPlace,'AIShotindx':AIShots,'ShotsFired':ShotsFired,'GameVersion':GV}
+                   'AItype':AItype,'AIShipindx':AIShipPlace,'AIShotindx':AIShots,'ShotsFired':ShotsFired,'GameVersion':GV,'AIShipPlace':AIPlace}
 
         gamesdb = self.db.B_Ship_Runs
         result = gamesdb.insert_one(gameres)

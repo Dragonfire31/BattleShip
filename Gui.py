@@ -2,9 +2,11 @@ from engine import Player
 from engine import Game
 from DataBase import DB_Engine
 import ctypes
+import time
 
 
-app_version="2.0.3"
+
+app_version="2.1.0"
 
 #Pygame Setup
 import pygame
@@ -346,6 +348,72 @@ class TextBox:
             if pygame.mouse.get_pressed()[0]:
                 self.pressed=False
 
+#Create Button Class RefreshButton
+class ToggleButton:
+    def __init__(self,text,width,height,pos,elevation,deftocall):
+        #Core attributes
+        self.pressed = False
+        self.elevation = elevation
+        self.dynamic_elecation = elevation
+        self.original_y_pos = pos[1]
+
+        # top rectangle
+        self.top_rect = pygame.Rect(pos,(width,height))
+        self.top_color = '#475F77'
+
+        # bottom rectangle
+        self.bottom_rect = pygame.Rect(pos,(width,height))
+        self.bottom_color = '#354B5E'
+        #text
+        self.text_surf = smallfont.render(text,True,'#FFFFFF')
+        self.text_rect = self.text_surf.get_rect(center = self.top_rect.center)
+
+        #def call
+        self.def_Call = deftocall
+
+        #waituntilnextclick
+        self.waittime = time.time()
+
+    def draw(self):
+        # elevation logic
+        self.top_rect.y = self.original_y_pos - self.dynamic_elecation
+        self.text_rect.center = self.top_rect.center
+
+        self.bottom_rect.midtop = self.top_rect.midtop
+        self.bottom_rect.height = self.top_rect.height + self.dynamic_elecation
+
+        pygame.draw.rect(SCREEN,self.bottom_color, self.bottom_rect,border_radius = 12)
+        pygame.draw.rect(SCREEN,self.top_color, self.top_rect,border_radius = 12)
+        SCREEN.blit(self.text_surf, self.text_rect)
+        self.check_click()
+
+    def check_click(self):
+        mouse_pos = pygame.mouse.get_pos()
+        if self.top_rect.collidepoint(mouse_pos):
+            #self.top_color = '#D74B4B'
+            if pygame.mouse.get_pressed()[0]:
+                if (time.time()-self.waittime)>0.5:
+                    self.waittime = time.time()
+                    if self.pressed:
+                        self.dynamic_elecation = 0
+                        self.pressed = False
+                        self.top_color = '#475F77'  # Grey
+                    elif not self.pressed:
+                        self.dynamic_elecation = 0
+                        self.pressed = True
+                        result = self.def_Call()
+                        self.top_color = '#169e1c'  # Green
+        else:
+            self.dynamic_elecation = self.elevation
+            if self.pressed == True:
+                self.dynamic_elecation = self.elevation
+                self.top_color = '#169e1c'  # Green
+            else:
+                self.dynamic_elecation = self.elevation
+                self.top_color = '#475F77'  # Grey
+
+
+
 #CREATE GAME
 #Make Game
 AI_INDX=0
@@ -490,6 +558,10 @@ def StartGame():
     global GameStarted
     global AI_INDX
     global game
+    global looplim
+    global toggle
+    toggle=False #reset endscreen
+    looplim=0
     GameStarted = True
     if AI_INDX == 2 and len(playerAI.shotstaken) < 1:  # probability
         game.player1_turn=False
@@ -501,6 +573,8 @@ def StartGame():
         AI = AI_Meth[AI_INDX]
         AI(initalize=True,MemMode=True)
         game.player1_turn = True
+    if len(playerAI.shotstaken) == 0 and AIShipSetup:  # if new game and AI setupship then setup ship
+        game.PlayerShotsMakeMemBoards()
 
 def Restart():
     global GameStarted
@@ -512,6 +586,7 @@ def Restart():
     Game_Turns=1
     GameStarted=False
     B_Heat_Map = False
+    INFO.pressed=False
     Bool_Ship_Setup=False
     showShips=False
     RefreshShips(setup=Setup_Ships_Last)
@@ -628,6 +703,14 @@ def PlayGuest():
         # password failed
         print("wrong password")
 
+AIShipSetup=False
+def AISetupShips():
+    global game
+    global AIShipSetup
+    game.AISetupShip=not game.AISetupShip
+    AIShipSetup = not AIShipSetup
+    return
+
 # Buttons
 #GameModeButtons
 BUTTON_OFFSET=15
@@ -641,7 +724,7 @@ QuitBut = Button('Quit', BUTTON_WIDTH, BUTTON_HEIGHT, (5,(HEIGHT-(BUTTON_HEIGHT*
 
 ShowEnemy = Button('Show Ship', BUTTON_WIDTH, BUTTON_HEIGHT, ((WIDTH-(BUTTON_WIDTH*3)),(HEIGHT-(BUTTON_HEIGHT*2+TOP_BUFFER))), 5,ShowShips)
 
-INFO = Button('AI Info', BUTTON_WIDTH-50, BUTTON_HEIGHT, ((WIDTH-(BUTTON_WIDTH)+15),(HEIGHT-(BUTTON_HEIGHT*2+TOP_BUFFER))), 5,Show_AI_Info)
+#INFO = Button('AI Info', BUTTON_WIDTH-50, BUTTON_HEIGHT, ((WIDTH-(BUTTON_WIDTH)+15),(HEIGHT-(BUTTON_HEIGHT*2+TOP_BUFFER))), 5,Show_AI_Info)
 
 AI_Select = Button('Change AI', BUTTON_WIDTH, BUTTON_HEIGHT, ((WIDTH-(BUTTON_WIDTH*2)+10),(HEIGHT-(BUTTON_HEIGHT*2+TOP_BUFFER))), 5,Sel_AI)
 
@@ -655,6 +738,10 @@ ShipShowNo= Button('No', BUTTON_WIDTH, BUTTON_HEIGHT, ((WIDTH/2)+75, 200), 5,Sho
 Username = TextBox(TEXTBOX_WIDTH, TEXTBOX_HEIGHT, (150, 200), 5,textLen=20,password=False)
 Password = TextBox(TEXTBOX_WIDTH, TEXTBOX_HEIGHT, (150+(TEXTBOX_WIDTH)+50, 200), 5,textLen=20,password=True)
 Confirm_Pass = TextBox(TEXTBOX_WIDTH, TEXTBOX_HEIGHT, (150+(TEXTBOX_WIDTH)+50, 300), 5,textLen=20,password=True)
+
+#Toggle Button in Gamemode
+AIShipTog = ToggleButton('AI Ship Placement', BUTTON_WIDTH+75, BUTTON_HEIGHT, ((WIDTH/2)-150, (HEIGHT-(BUTTON_HEIGHT*2+TOP_BUFFER))), 5,AISetupShips)
+INFO = ToggleButton('AI Info', BUTTON_WIDTH-50, BUTTON_HEIGHT, ((WIDTH-(BUTTON_WIDTH)+15),(HEIGHT-(BUTTON_HEIGHT*2+TOP_BUFFER))), 5,Show_AI_Info)
 
 #LoginScreen Buttons
 LoginBTN = Button('Login', BUTTON_WIDTH, BUTTON_HEIGHT, ((WIDTH/2)-100, 300), 5,Login)
@@ -680,6 +767,7 @@ def Mbox(title,text,style):
 #pygame main loop
 animating = True
 pausing = False
+toggle = False
 looplim = 0
 while animating:
     #track user interaction
@@ -947,6 +1035,7 @@ while animating:
                     StartBut.draw()
                     ManShip.draw()
                     AI_Select.draw()
+                    AIShipTog.draw()
             if AI_INDX == 2 or AI_INDX==3:
                 INFO.draw()
             QuitBut.draw()
@@ -1040,11 +1129,16 @@ while animating:
 
             #game over message
             if game.over:
-                text = "Player "+str(game.result)+" wins!"
-                textbox = FinalFont.render(text,False,GREY,WHITE)
-                SCREEN.blit(textbox,((WIDTH//2-240),(HEIGHT//2-50)))
+                if not toggle:
+                    text = "Player "+str(game.result)+" wins!"
+                    textbox = FinalFont.render(text,False,GREY,WHITE)
+                    SCREEN.blit(textbox,((WIDTH//2-240),(HEIGHT//2-50)))
+                looplim+=1
+                pygame.time.wait(10)
+                if looplim>=150:
+                    looplim=0
+                    toggle = not toggle
                 StartOverBut.draw()
-            pygame.time.wait(10)
         #update
         #pygame.time.wait(250)
         pygame.display.flip()
