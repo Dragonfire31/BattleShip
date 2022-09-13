@@ -692,30 +692,33 @@ class Game:
     def PlayerShotsMakeMemBoards(self):
         # get past games
         db = self.DB
-        db.process_prev_games()
+        # db.process_prev_games()
         gamedata = db.gamedf.copy()
 
         #top results
         if len(self.DB.PSMemBoard)>0:
             aptopresults=self.DB.PSMemBoard[0] #keep the top 100 results
             ptopresults=self.DB.PSMemBoard[1]  #keep the top 25 results
-            optopresults=self.DB.PSMemBoard[2]  #keep top 50 res from other players
-
+            pmapInfluence=self.DB.PSMemBoard[2] #1-0 % influence of result
+            OpmaoInfluence=self.DB.PSMemBoard[3]  #1-0% influence of results from other players
         else:
-            aptopresults=100 #keep the top 100 results
-            ptopresults=25 #keep the top 25 results
-            optopresults=50 #keep top 50 res from other players
+            aptopresults=100 #look at the top 100 results
+            ptopresults=25 #look at the top 25 results
+            pmapInfluence=1.0 #keep the top 100 results
+            OpmaoInfluence=1.0  #keep the top 25 results
 
         # process previous games
+        usernametmp = self.DB.UserInfo.USERID
         gamedata['date'] = pd.to_datetime(gamedata['date'])
         gamedata = gamedata.sort_values(by='date', ascending=False)
-        playershotindex = gamedata['playershotsindx']
+
+        gamequery = gamedata[(gamedata.userID == usernametmp)]
+        playershotindex = gamequery['playershotsindx']
         playershotindex=playershotindex[:aptopresults]
-        masterindx = []  # all players all shots indexs
+        masterindx = []  # all player shots indexs
         for item in playershotindex:
             masterindx = masterindx + item
 
-        usernametmp = self.DB.UserInfo.USERID
         gamequery = gamedata[(gamedata.userID == usernametmp)]
         playerplacedshipindexPShips = gamequery['playershotsindx']  # player placed ships
         playerplacedshipindexPShips = playerplacedshipindexPShips[:ptopresults]
@@ -725,18 +728,18 @@ class Game:
 
         gamequery = gamedata[(gamedata.userID != usernametmp)]
         otherrandshipindexPShips = gamequery['playershotsindx']  # other player random placed ships
-        otherrandshipindexPShips=otherrandshipindexPShips[:optopresults]
+        otherrandshipindexPShips=otherrandshipindexPShips[:aptopresults]
         oprshipindx = []  # other player placed random ships index only
         for item in otherrandshipindexPShips:
             oprshipindx = oprshipindx + item[:self.DB.AIShotLookback]
 
-        allpopularindxes = {}  # All shot indexs
+        allpopularindxes = {}  # All player shot indexs
         ptsi = {}  # player top (17default) shot indexs
-        optsi = {}  # other player top (17default) shot indexs
+        optsi = {}  # other players shot indexs
         for i in range(0, 100):
-            allpopularindxes[i] = masterindx.count(i)
+            allpopularindxes[i] = masterindx.count(i) # All player shot indexs
             ptsi[i] = ppshipindx.count(i)    # player top (17default) shot indexs
-            optsi[i] = oprshipindx.count(i)  # other player top (17default) shot indexs
+            optsi[i] = oprshipindx.count(i)  # other players shot indexs
 
         # Create three maps, 1 player shots, 2 other players shots, all shots
         tmpplayer = []
@@ -759,9 +762,9 @@ class Game:
             self.allshotMemMap[i]=val3
 
         #debug section to see maps
-        pmapv = np.array(tmpplayer).reshape(10,10)
-        opmapv = np.array(tmpop).reshape(10,10)
-        apmapv = np.array(tmpap).reshape(10,10)
+        pmapv = np.array(tmpplayer).reshape(10,10) #looks at the first # of shots to see where best to place ships
+        opmapv = np.array(tmpop).reshape(10,10) #over 100 games frequency of other player shots
+        apmapv = np.array(tmpap).reshape(10,10) #over 100 games frequency of current player shots
 
         self.setupAIships()
         return
@@ -770,16 +773,38 @@ class Game:
         shiplengths = self.playerAI.ship_sizes
         self.playerAI.ships=[] #clear current config
         self.playerAI.indexes=[] #clear indexes
-        pmap = self.playershotMemMap
-        opmap = self.opshotMemMap
-        apmap = self.allshotMemMap
+        pmap = self.playershotMemMap #looks at the first # of shots to see where best to place ships
+        opmap = self.opshotMemMap #over 100 games frequency of other player shots
+        apmap = self.allshotMemMap #over 100 games frequency of current player shots
         maxval = pmap[max(pmap, key=pmap.get)] #grab index of lowest score
+
         for sl in shiplengths:#Go through each ship placement
             for val in range(maxval):
                 shipsindx = self.playerAI.indexes
-                playerBestChoices = [i for i, square in pmap.items() if square == val]
-                OPBestChoices = [i for i, square in opmap.items() if square == val]
-                APBestChoices = [i for i, square in apmap.items() if square == val]
+                # playerBestChoices = [i for i, square in pmap.items() if square == val]
+                #
+                # horiz_score={}
+                # verti_score={}
+                # for indx in playerBestChoices:
+                #     if indx not in shipsindx:
+                #        horiz_score[indx] = self.shipsetupscoring(pmap,opmap,apmap,sl,indx,"h")
+                #        verti_score[indx] = self.shipsetupscoring(pmap, opmap, apmap, sl, indx, "v")
+
+                pmap_horiz_score={}
+                pmap_verti_score={}
+                for ind in range(100):
+                    if ind not in shipsindx:
+                           pmap_horiz_score[ind] = self.shipsetupscoring(pmap,opmap,apmap,sl,ind,"h",True)
+                           pmap_verti_score[ind] = self.shipsetupscoring(pmap, opmap, apmap, sl, ind, "v",True)
+
+                #sort lists and take top 10 results
+                pmap_horiz_score = dict(sorted(pmap_horiz_score.items(),key=lambda item:item[1])[:10])
+                pmap_verti_score = dict(sorted(pmap_verti_score.items(),key=lambda item:item[1])[:10])
+
+                l1=list(pmap_horiz_score.keys())
+                l2=list(pmap_verti_score.keys())
+                playerBestChoices=l1+l2
+                playerBestChoices=list(dict.fromkeys(playerBestChoices)) #remove duplicate indx
 
                 horiz_score={}
                 verti_score={}
@@ -788,54 +813,55 @@ class Game:
                        horiz_score[indx] = self.shipsetupscoring(pmap,opmap,apmap,sl,indx,"h")
                        verti_score[indx] = self.shipsetupscoring(pmap, opmap, apmap, sl, indx, "v")
 
-                #go through points to find lowest points in dic
-                top_target_indexes_h=[]
-                top_target_indexes_v=[]
-                fin_min_h = min(horiz_score, key=horiz_score.get) #grab index of lowest score
-                h_score = horiz_score[fin_min_h]
-                if h_score<100000:
-                    top_target_indexes_h = [k for k, v in horiz_score.items()
-                                            if v == horiz_score.get(fin_min_h)] #grabs all indexes that match lowest score
+                if len(horiz_score) >0 or len(verti_score)>0:
+                    #go through points to find lowest points in dic
+                    top_target_indexes_h=[]
+                    top_target_indexes_v=[]
+                    fin_min_h = min(horiz_score, key=horiz_score.get) #grab index of lowest score
+                    h_score = horiz_score[fin_min_h]
+                    if h_score<100000:
+                        top_target_indexes_h = [k for k, v in horiz_score.items()
+                                                if v == horiz_score.get(fin_min_h)] #grabs all indexes that match lowest score
 
-                fin_min_v = min(verti_score, key=verti_score.get)
-                v_score=verti_score[fin_min_v]
-                if v_score < 100000:
-                    top_target_indexes_v = [k for k, v in verti_score.items() if
-                                          v == verti_score.get(fin_min_v)]
+                    fin_min_v = min(verti_score, key=verti_score.get)
+                    v_score=verti_score[fin_min_v]
+                    if v_score < 100000:
+                        top_target_indexes_v = [k for k, v in verti_score.items() if
+                                              v == verti_score.get(fin_min_v)]
 
-                if h_score<v_score and len(top_target_indexes_h)>0: #horizontal better
-                    index = random.choice(top_target_indexes_h)
-                    row = index // 10
-                    col = index % 10
-                    self.playerAI.place_ships(sizes=[sl],row=row,col=(col),orientation='h')
-                    break
-
-                elif v_score<h_score and len(top_target_indexes_v)>0: #vertical better
-                    index = random.choice(top_target_indexes_v)
-                    row = index // 10
-                    col = index % 10
-                    self.playerAI.place_ships(sizes=[sl],row=row,col=(col),orientation='v')
-                    break
-
-                elif v_score==h_score: #they are equal
-                    choice = bool(random.getrandbits(1))
-                    if choice: #horizontal
+                    if h_score<v_score and len(top_target_indexes_h)>0: #horizontal better
                         index = random.choice(top_target_indexes_h)
                         row = index // 10
                         col = index % 10
-                        self.playerAI.place_ships(sizes=[sl], row=row, col=(col), orientation='h')
+                        self.playerAI.place_ships(sizes=[sl],row=row,col=(col),orientation='h')
+                        break
 
-                    else: #vertical
+                    elif v_score<h_score and len(top_target_indexes_v)>0: #vertical better
                         index = random.choice(top_target_indexes_v)
                         row = index // 10
                         col = index % 10
-                        self.playerAI.place_ships(sizes=[sl], row=row, col=(col), orientation='v')
-                    break
-                choice = bool(random.getrandbits(1))
+                        self.playerAI.place_ships(sizes=[sl],row=row,col=(col),orientation='v')
+                        break
+
+                    elif v_score==h_score: #they are equal
+                        choice = bool(random.getrandbits(1))
+                        if choice: #horizontal
+                            index = random.choice(top_target_indexes_h)
+                            row = index // 10
+                            col = index % 10
+                            self.playerAI.place_ships(sizes=[sl], row=row, col=(col), orientation='h')
+
+                        else: #vertical
+                            index = random.choice(top_target_indexes_v)
+                            row = index // 10
+                            col = index % 10
+                            self.playerAI.place_ships(sizes=[sl], row=row, col=(col), orientation='v')
+                        break
+
                 #if we find nothing that works loop again and increase value of search
         return
 
-    def shipsetupscoring(self,pmap,opmap,apmap,shiplength,index,orient):
+    def shipsetupscoring(self,pmap,opmap,apmap,shiplength,index,orient,pmapOnly=False):
         points = 100001
         row = index // 10
         col = index % 10
@@ -846,29 +872,42 @@ class Game:
             can_place=self.playerAI.place_ships(sizes=[ship_length],row=row,col=(col),orientation='h',CheckOnly=True)
             if can_place:
                 new_ind_h = Ship(ship_length, row=row, col=(col), orientation='h')
-                points = self.placement_check_ship_place(new_ind_h, pmap,opmap,apmap)
+                points = self.placement_check_ship_place(new_ind_h, pmap,opmap,apmap,pmapOnly)
 
         if orient=='v':# vertical check
             can_place=self.playerAI.place_ships(sizes=[ship_length],row=(row),col=col,orientation='v',CheckOnly=True)
             if can_place:
                 new_ind_h = Ship(ship_length, row=(row), col=col, orientation='v')
-                points = self.placement_check_ship_place(new_ind_h, pmap,opmap,apmap)
+                points = self.placement_check_ship_place(new_ind_h, pmap,opmap,apmap,pmapOnly)
         return points
 
-    def placement_check_ship_place(self,ship,pmap,opmap,apmap): #For points on prediction maps
+    def placement_check_ship_place(self,ship,pmap,opmap,apmap,pmapOnly=False): #For points on prediction maps
         # calculate score
         points = 0
-        for i in ship.indexes:
-            #check player map
-            points += pmap[i]
+        #top results
+        if len(self.DB.PSMemBoard)>0:
+            pmapInfluence=self.DB.PSMemBoard[2] #1-0 % influence of result
+            OpmaoInfluence=self.DB.PSMemBoard[3]  #1-0% influence of results from other players
+        else:
+            pmapInfluence=1.0 #keep the top 100 results
+            OpmaoInfluence=1.0  #keep the top 25 results
 
-            #check other player maps
-            points += opmap[i]
+        if pmapOnly:
+            for i in ship.indexes:
+                points+=pmap[i]
+        else:
+            for i in ship.indexes:
+                # #check player map
+                # points += pmap[i]
 
-            #check all player map
-            points += apmap[i]
+                #check other player map all shots
+                points += (opmap[i] * OpmaoInfluence)
+
+                #check player map all shots
+                points += (apmap[i]* pmapInfluence)
 
         # return score
+        points = round(points)
         return points
 
     def advance_ai(self):

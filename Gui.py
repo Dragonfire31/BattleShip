@@ -6,7 +6,7 @@ import time
 
 
 
-app_version="2.1.0"
+app_version="2.1.5"
 
 #Pygame Setup
 import pygame
@@ -560,9 +560,12 @@ def StartGame():
     global game
     global looplim
     global toggle
+    global DB_Con
     toggle=False #reset endscreen
     looplim=0
     GameStarted = True
+    DB_Con.retrieve_settings()
+    DB_Con.process_prev_games()
     if AI_INDX == 2 and len(playerAI.shotstaken) < 1:  # probability
         game.player1_turn=False
         AI = AI_Meth[AI_INDX]

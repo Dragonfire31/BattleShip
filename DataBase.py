@@ -29,7 +29,7 @@ class DB_Engine:
         self.BIMG=None
         self.GameVer=GV
         self.AIShotLookback=17 #number of player shots the AI needs to look back on for best placement of ships
-        self.PSMemBoard=[]
+        self.PSMemBoard=[] #values for [0] max num of games to look at, [1] previous games specific to player to look back on,[2] % of using player info, [3] % of using other info
 
         print(self.dbConnect(self.cluster))
 
