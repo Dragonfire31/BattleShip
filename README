@@ -1,0 +1,7 @@
+The EXE of the game can be found in the dist folder. 
+Download the EXE, it will throw a windows error, this is normal as it is a pygame developed game that hasn't 
+been cleared through windows defender so it does throw a saftey error, if you continue through it will launch and attempt to communicate to the DB, if it is 
+unscussful it will allow you to play against any of the AI's that do no require previous game data to play. 
+
+The Database.py has been left out for now since it does have infomation to the SQL database. This file contains commands for communicating to the SQL database to 
+retrieve user information, previous game data, and saving current games. 
